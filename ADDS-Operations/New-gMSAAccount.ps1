@@ -1,144 +1,172 @@
-﻿#Requires -Module ActiveDirectory
-function New-gMSAccount {
-<###
-.SYNOPSIS
-    Creates a new Group Managed Service Account (gMSA) with optional settings.
+﻿#requires -Version 2.0
+#Requires -Module ActiveDirectory
+function New-gMSAccount 
+{
+  <###
+      .SYNOPSIS
+      Creates a new Group Managed Service Account (gMSA) with optional settings.
 
-.DESCRIPTION
-    This function automates the creation of a gMSA, including its associated security group.
-    It allows configuring Kerberos encryption, service principal names (SPNs), and delegation settings.
-    The gMSA account name must not exceed 15 characters due to Active Directory limitations.
+      .DESCRIPTION
+      This function automates the creation of a gMSA, including its associated security group.
+      It allows configuring Kerberos encryption, service principal names (SPNs), and delegation settings.
+      The gMSA account name must not exceed 15 characters due to Active Directory limitations.
 
-.PARAMETER AccountName
-    Specifies the name of the gMSA account to be created. This parameter is mandatory.
-    The name must be 15 characters or less.
+      .PARAMETER AccountName
+      Specifies the name of the gMSA account to be created. This parameter is mandatory.
+      The name must be 15 characters or less.
 
-.PARAMETER AccountTargetPath
-    Defines the Active Directory path where the gMSA account will be created.
-    Defaults to 'CN=Managed Service Accounts' within the current domain.
+      .PARAMETER AccountTargetPath
+      Defines the Active Directory path where the gMSA account will be created.
+      Defaults to 'CN=Managed Service Accounts' within the current domain.
 
-.PARAMETER GroupTargetPath
-    Specifies the location in Active Directory where the associated security group should be created.
-    Defaults to the Users container of the current domain.
+      .PARAMETER GroupTargetPath
+      Specifies the location in Active Directory where the associated security group should be created.
+      Defaults to the Users container of the current domain.
 
-.PARAMETER DNSSuffix
-    Defines the DNS suffix for the gMSA account. Defaults to the domain's root suffix.
+      .PARAMETER DNSSuffix
+      Defines the DNS suffix for the gMSA account. Defaults to the domain's root suffix.
 
-.PARAMETER KerbAuthTypes
-    Specifies the Kerberos encryption types to be used. Defaults to 'AES256'.
+      .PARAMETER KerbAuthTypes
+      Specifies the Kerberos encryption types to be used. Defaults to 'AES256'.
 
-.PARAMETER PasswordIntervalDays
-    Defines how often the managed password should be updated. Defaults to 7 days.
+      .PARAMETER PasswordIntervalDays
+      Defines how often the managed password should be updated. Defaults to 7 days.
 
-.PARAMETER AddMembersToGroup
-    A list of AD objects to be added to the associated security group.
+      .PARAMETER AddMembersToGroup
+      A list of AD objects to be added to the associated security group.
 
-.PARAMETER ServicePrincipalNames
-    A list of SPNs to be registered for the gMSA account.
-    If specified, the account will also be marked as TrustedForDelegation.
+      .PARAMETER ServicePrincipalNames
+      A list of SPNs to be registered for the gMSA account.
+      If specified, the account will also be marked as TrustedForDelegation.
 
-.PARAMETER Description
-    Optional description for the gMSA account.
+      .PARAMETER Description
+      Optional description for the gMSA account.
 
-.PARAMETER DisplayName
-    Optional display name for the gMSA account.
+      .PARAMETER DisplayName
+      Optional display name for the gMSA account.
 
-.PARAMETER Enabled
-    Specifies whether the gMSA account should be enabled upon creation. Defaults to $true.
+      .PARAMETER Enabled
+      Specifies whether the gMSA account should be enabled upon creation. Defaults to $true.
 
-.EXAMPLE
-    New-gMSAccount -AccountName 'gMSA_SQL' -AddMembersToGroup 'SQL Admins' -ServicePrincipalNames 'MSSQLSvc/sqlserver.domain.com'
-    This creates a gMSA account named 'gMSA_SQL', adds 'SQL Admins' to its security group, and registers the specified SPN.
+      .EXAMPLE
+      New-gMSAccount -AccountName 'gMSA_SQL' -AddMembersToGroup 'SQL Admins' -ServicePrincipalNames 'MSSQLSvc/sqlserver.domain.com'
+      This creates a gMSA account named 'gMSA_SQL', adds 'SQL Admins' to its security group, and registers the specified SPN.
 
-.NOTES
-    Author: Raimund Pliessnig
-    Requires: Active Directory PowerShell Module
-###>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true, HelpMessage='gMSA Name must be a maximum of 15 characters.')]
-        [ValidateScript({
-            if ($_.Length -gt 15) {
-                throw 'The gMSA account name must not exceed 15 characters.'
-            }
-            return $true
-        })]
-        [string]$AccountName,
-        [string]$AccountTargetPath = ('CN=Managed Service Accounts,' + (Get-ADDomain | Select-Object -ExpandProperty DistinguishedName)),
-        [string]$GroupTargetPath = (Get-ADDomain | Select-Object -ExpandProperty UsersContainer),
-        [string]$DNSSuffix = (Get-ADDomain | Select-Object -ExpandProperty DNSRoot),
-        [string[]]$KerbAuthTypes = @('AES256'),
-        [int]$PasswordIntervalDays = 7,
-        [string[]]$AddMembersToGroup = @(),
-        [string[]]$ServicePrincipalNames = @(),
-        [string]$Description = '',
-        [string]$DisplayName = '',
-        [bool]$Enabled = $true
-    )
-
-    try {
-        # Check or create the security group
-        $grpAuthorizedForAccount = Get-ADGroup -Filter { Name -eq $($AccountName + '-Authorized') } -ErrorAction SilentlyContinue
-        if (-not $grpAuthorizedForAccount) {
-            Write-Host ( '[INFO] Creating security group for {0}...' -f $AccountName )
-            $grpAuthorizedForAccount = New-ADGroup -GroupCategory Security -GroupScope Global -Name ($AccountName + '-Authorized') -Path $GroupTargetPath -PassThru
-        }
+      .NOTES
+      Author: Raimund Pliessnig
+      Version 1.0.0.1
+      Requires: Active Directory PowerShell Module
+  ###>
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory = $true, HelpMessage = 'gMSA Name must be a maximum of 15 characters.')]
+    [ValidateScript({
+          if ($_.Length -gt 15) 
+          {
+            throw 'The gMSA account name must not exceed 15 characters.'
+          }
+          return $true
+    })]
+    [string]$AccountName,
+    [string]$AccountTargetPath = ('CN=Managed Service Accounts,' + (Get-ADDomain | Select-Object -ExpandProperty DistinguishedName)),
+    [string]$GroupTargetPath = (Get-ADDomain | Select-Object -ExpandProperty UsersContainer),
+    [string]$DNSSuffix = (Get-ADDomain | Select-Object -ExpandProperty DNSRoot),
+    [string[]]$KerbAuthTypes = @('AES256'),
+    [int]$PasswordIntervalDays = 7,
+    [string[]]$AddMembersToGroup = @(),
+    [string[]]$ServicePrincipalNames = @(),
+    [string]$Description = '',
+    [string]$DisplayName = '',
+    [bool]$Enabled = $true
+  )
+  # Check or create the security group
+  try
+  {
+    $grpAuthorizedForAccount = Get-ADGroup -Identity $($AccountName + '-Authorized') -ErrorAction SilentlyContinue
+  }
+  catch
+  {
+    Write-Host -Object ( '[INFO] Security Group "{0}-Authorized" is not found! - needs to be created' -f $AccountName )
+    try 
+    {  
+        Write-Host -Object ( '[INFO] Creating security group for {0}...' -f $AccountName )
+        $grpAuthorizedForAccount = New-ADGroup -Name $($AccountName + '-Authorized') -GroupCategory Security -GroupScope Global -PassThru -Path $GroupTargetPath 
+      
     }
-    catch {
-        Write-Error -Message ( '[ERROR] Failed to create or retrieve the security group for {0}: {1}' -f $AccountName, $_ )
-        return
+    catch 
+    {
+      Write-Error -Message ( '[ERROR] Failed to create or retrieve the security group for {0}: {1}' -f $AccountName, $_ )
+      return
     }
+  }  
+  # Add members to the security group if specified
+  foreach ($member in $AddMembersToGroup) 
+  {
+    try 
+    {
+      Write-Host -Object ( '[INFO] Adding {0} to security group {1}...' -f $member, $grpAuthorizedForAccount.Name )
+      Add-ADGroupMember -Identity $grpAuthorizedForAccount -Members (Get-ADComputer $member)
+    }
+    catch 
+    {
+      Write-Error -Message ( '[ERROR] Failed to add {0} to group {1}: {2}' -f $member, $grpAuthorizedForAccount.Name, $_ )
+    }
+  }
     
-    # Add members to the security group if specified
-    foreach ($member in $AddMembersToGroup) {
-        try {
-            Write-Host ( '[INFO] Adding {0} to security group {1}...' -f $member, $grpAuthorizedForAccount.Name )
-            Add-ADGroupMember -Identity $grpAuthorizedForAccount -Members $member
-        }
-        catch {
-            Write-Error -Message ( '[ERROR] Failed to add {0} to group {1}: {2}' -f $member, $grpAuthorizedForAccount.Name, $_ )
-        }
+  try 
+  {
+    Write-Host -Object ( '[INFO] Creating gMSA account {0}...' -f $AccountName )
+    $params = @{
+      Name                                       = $AccountName
+      PrincipalsAllowedToRetrieveManagedPassword = $grpAuthorizedForAccount
+      DNSHostName                                = ($AccountName + '.' + $DNSSuffix)
+      Path                                       = $AccountTargetPath
+      KerberosEncryptionType                     = $KerbAuthTypes
+      ManagedPasswordIntervalInDays              = $PasswordIntervalDays
+      Enabled                                    = $Enabled
     }
-    
-    try {
-        Write-Host ( '[INFO] Creating gMSA account {0}...' -f $AccountName )
-        $params = @{
-            Name = $AccountName
-            PrincipalsAllowedToRetrieveManagedPassword = $grpAuthorizedForAccount
-            DNSHostName = ($AccountName + '.' + $DNSSuffix)
-            Path = $AccountTargetPath
-            KerberosEncryptionType = $KerbAuthTypes
-            ManagedPasswordIntervalInDays = $PasswordIntervalDays
-            Enabled = $Enabled
-        }
         
-        if ($Description) { $params['Description'] = $Description }
-        if ($DisplayName) { $params['DisplayName'] = $DisplayName }
+    if ($Description) 
+    {
+      $params['Description'] = $Description 
+    }
+    if ($DisplayName) 
+    {
+      $params['DisplayName'] = $DisplayName 
+    }
         
-        New-ADServiceAccount @params
-    }
-    catch {
-        Write-Error -Message ( '[ERROR] Failed to create the gMSA account {0}: {1}' -f $AccountName, $_ )
-        return
-    }
+    New-ADServiceAccount @params
+  }
+  catch 
+  {
+    Write-Error -Message ( '[ERROR] Failed to create the gMSA account {0}: {1}' -f $AccountName, $_ )
+    return
+  }
     
-    # Add Service Principal Names if specified
-    if ($ServicePrincipalNames.Count -gt 0) {
-        try {
-            Write-Host ( '[INFO] Adding SPNs to gMSA account {0}...' -f $AccountName )
-            Set-ADServiceAccount -Identity $AccountName -ServicePrincipalNames @{Add=$ServicePrincipalNames} -TrustedForDelegation $true
-        }
-        catch {
-            Write-Error -Message ( '[ERROR] Failed to add SPNs to gMSA account {0}: {1}' -f $AccountName, $_ )
-        }
+  # Add Service Principal Names if specified
+  if ($ServicePrincipalNames.Count -gt 0) 
+  {
+    try 
+    {
+      Write-Host ( '[INFO] Adding SPNs to gMSA account {0}...' -f $AccountName )
+      Set-ADServiceAccount -Identity $AccountName -ServicePrincipalNames @{
+        Add = $ServicePrincipalNames
+      } -TrustedForDelegation $true
     }
+    catch 
+    {
+      Write-Error -Message ( '[ERROR] Failed to add SPNs to gMSA account {0}: {1}' -f $AccountName, $_ )
+    }
+  }
+  Write-Host ( '[INFO] Creating gMSA account  {0}... Successful!' -f $AccountName )
+  
 }
 
 # SIG # Begin signature block
 # MIIrcwYJKoZIhvcNAQcCoIIrZDCCK2ACAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUjGh7Qff3ZUqQTYrI76IIQSAa
-# INKggiT/MIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUjPUXOi/KipUEMlHKFR/DVF23
+# SaSggiT/MIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
 # AQwFADBlMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYD
 # VQQLExB3d3cuZGlnaWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVk
 # IElEIFJvb3QgQ0EwHhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQsw
@@ -343,28 +371,28 @@ function New-gMSAccount {
 # aWZpY2F0ZSBBdXRob3JpdHkxIzAhBgkqhkiG9w0BCQEWFHBraUBkaWUtbW9tcGZk
 # aWVzLmF0AhNZAAABEZB2puEQzbonAAAAAAERMAkGBSsOAwIaBQCgeDAYBgorBgEE
 # AYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwG
-# CisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTlG4RN
-# 8CUG2AzzobJsKoOqgWGuUDANBgkqhkiG9w0BAQEFAASCAQBjkItNTi0citRniktM
-# LpW11oRdm5amtqIXFs8A/8NC9qPGfoedh6HrGMVf2Aygwwf5MkbuWZRAqrsR3TuG
-# vxCTE2Nof4ee0JTvmzokygvsR2j3DyMaD7NlfTX03yOtv+9P5rer/Rh1zE2sN1J1
-# Flm7QnozOyk38RUcGpXMUGPAMgeZfndixOseLOY8ZpQC19uvns+cXsrQTSn+yp9o
-# lshUvpb/tIN534sD/FxA1iLM3HGOcnMYj3z0LcHYnWZOCi9B8ZUvTvxwUa8ft44L
-# 2HZfthsoL4f9yb5Tff5KDeX1DunYCwSzRGxaWPwMaRj089VMK5LTR8mZ1UFGjtyP
-# AAzloYIDIDCCAxwGCSqGSIb3DQEJBjGCAw0wggMJAgEBMHcwYzELMAkGA1UEBhMC
+# CisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBSq81WU
+# Qirtwd36UmnknYUApMnQ4jANBgkqhkiG9w0BAQEFAASCAQARm20bbJBLOt9QTCNy
+# oObJ8Mm9wK3t1EH13EYy5og0DNdvP69RYd8Zj5tMUy1+j8GdQBPq3A4QNng0WCKA
+# FknSQC0rofI9zDZqdXjosjRGfdNtftRINjxkpA6ZzzCbNDYw0mMuNXdIKXJz2/eh
+# ZLVsynyzAqXMy19VRfVVc+wnhhjEjTom1VKmW2CV9EtR55lvXcPHQGm0DkfLE09g
+# dmLJsWYqrFHouuUWqppqDpT7WdsM/GXrM6jDXsRfJjdzEQjODi+gN+RqUWKYs1eC
+# yk7KswQM/Zia0P6COl8az2iDSGVnU8sV3jDnlR7fhs5FCArx4JcFRMoJU2xi+Qe1
+# YxxioYIDIDCCAxwGCSqGSIb3DQEJBjGCAw0wggMJAgEBMHcwYzELMAkGA1UEBhMC
 # VVMxFzAVBgNVBAoTDkRpZ2lDZXJ0LCBJbmMuMTswOQYDVQQDEzJEaWdpQ2VydCBU
 # cnVzdGVkIEc0IFJTQTQwOTYgU0hBMjU2IFRpbWVTdGFtcGluZyBDQQIQC65mvFq6
 # f5WHxvnpBOMzBDANBglghkgBZQMEAgEFAKBpMBgGCSqGSIb3DQEJAzELBgkqhkiG
-# 9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTI1MDMwODE1MDgwNFowLwYJKoZIhvcNAQkE
-# MSIEIInRACHJDf99A00pgVc9mpyRI+Xs6O4B8b1TvtdcoudmMA0GCSqGSIb3DQEB
-# AQUABIICALIMxx+Gs5iJC6F+gjALC3CiffaM/nY6KaUlExlyDtYZKwzYfoS6rJKf
-# vUr/M+y70RElI4VsguXtB1rDgmNGFhSQkAvB/pp4XUmQXffiFe9cp5RAkSH2/zRr
-# EoQ+JPQp5D83/eShmeerQpoTMdTQDeR+18d3TFDKsPFjHND9bTYOQOqUL7MdPWOf
-# kiVJT1H6MrZjLM5++8WJThbwGfAc0GMTdX7qBEVQAIUckIzyIGJmjNo0Ge8NPJzV
-# 4lGLifnVp7gTe0AWYsVrgzQPUXvZe0VZHWkoZZbbHpgOE4Ef3PS7UWOqp4g0COOR
-# FkGUOVhffcGvrsDrWwXhwXILbFOJqagpX4iSCyF9UyAApVicJicX09IA7LXfJ4KD
-# Etq+7E5WuBSS2r618lZ7AYLKYsihTUNG34KrONnU6Yhnpm8ePbVC/wsrY2bBGcv/
-# JQxp4l/rcjbGYW7GXNYV3cLvoKL9TLGdluMmRB2QugTmFmkO6R/Nkr/NGn9700QH
-# y+49Yo2OCLx1vXIEf52sh8CZu61f3WJzZ3NX+/16hPbirImx4TU07Fcvar1VUI2I
-# iqGWSuF2aD5VFbdtuhffoXBS3/82rlp0DiGxx7fB3LainXQAtQ8yzc7OWeVWb/5V
-# kabICbVRrdc1R08G+PMvFa7UVE0ozzQL5FXmP5Wp6b37caALjphj
+# 9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTI1MDMxMjIwMDgzNVowLwYJKoZIhvcNAQkE
+# MSIEINMXCYLmzv2I2oX+FMoFCy54egpzv9IEiuxkAX8jwKHtMA0GCSqGSIb3DQEB
+# AQUABIICALmd3EDPePwhHzBMgyn9eLzQ9W7lWj/scc+HTTEfhbZI09LAWMqYb56p
+# hFMRIbxPYDmTdKzNwAf6tcvyuB2MmOdtfFywtubIzfHMZGSGI2Zl0JU0mMlcBgDG
+# s9vA+Tqh9gKTsP1+kRQYXg/HRB4bIJJ7xzY7I3uqxZduRw0mGEA8GWfqENaXbW+D
+# ETZ5tsYAypVfSkKT/yK6z3Kfea8WX+A83BLxngH1Nb0//jE4C6oY30KMTCUU5OgG
+# QKMmbyFcF8URJRRXSoCfrJ/iTDZ9P474LhxdKa2rKouumItxdBahCAgScIX+18rx
+# /mbs8Etu72SGVKdEvEZhTJ98QRRdNCC+BGtTWL9b0t5norDihbjew+pZDFSw1GgL
+# c53N6cHi6wqcWOUQmitz/K2c9HvR6u1tbBlH9pvnotnGq3XpQMFlV/7sW0T5rbbW
+# wuA9VCNq6b6akmh5UDI26Ec1YvG8jFUPkgO3rNPKJtBY94RSFus7fM+VrJMKLUIu
+# 4jp+HX3K8sj7t/QabE+yji9SNmq2t//fkuTrAmE0P6uAJOPzQbXMGz0RhQob9ziI
+# wAiNrOYtGjABPyAQ/J7LQZP2xof/kc3f7pV+f5pI1tbTaN9IycimWL3Q8OQPCCa0
+# ge+7FJWNPfEUXHLkB20OSs+zPG406yP+R24XuCT9EyEkboecWfG4
 # SIG # End signature block
